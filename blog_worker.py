@@ -3,6 +3,7 @@ Gets Blog Posts data and summarizes it
 """
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
 import sys
 
 
@@ -100,14 +101,17 @@ class BlogPost:
         # Get authors from post
         for author in soup.find_all("h3", {"class": "lb-h4"}):
             if author:
-                authors.append(author.get_text().strip())
+                authors.append(author.get_text().strip().lower())
         for author in soup.find_all("span", {"property": "author"}):
             if author:
                 if author not in authors:
-                    authors.append(author.get_text().strip())
+                    authors.append(author.get_text().strip().lower())
             
         # Get Published date
-        today = soup.find("time", {"property": "datePublished"}).get_text().strip()
+        pub_date_str = soup.find("time", {"property": "datePublished"}).get_text().strip()
+        # Convert Published date to datetime object
+        date_obj = datetime.strptime(pub_date_str, "%d %b %Y")
+        published_date = date_obj.strftime("%m-%d-%Y")
         # Get tags from post
         blog_title_tags = soup.find("span", {"class": "blog-post-categories"}).get_text().strip().lower() + f", {blog_title.lower()}"
         aws_tags = self.get_tags(blog_title_tags)
@@ -122,10 +126,10 @@ class BlogPost:
                 if tag.lower() not in aws_tags:
                     aws_tags.append(tag.lower())
         post_data = {
-                'category': category,
-                'title': blog_title,
+                'category': category.lower(),
+                'blog_title': blog_title.lower(),
                 'authors': list(set(authors)),
-                'date': today,
+                'date_published': published_date,
                 'tags': list(set(aws_tags)),
                 'url': self.url
             }
@@ -148,5 +152,5 @@ class BlogPost:
             lines = [line.rstrip().lower() for line in f]
             for tag in lines:
                 if tag in blog_title_tags:
-                    tags.append(tag)
+                    tags.append(tag.lower())
             return tags

@@ -1,4 +1,5 @@
 from blog_worker import BlogPost
+from db_worker import DynamoDBWorker
 
 
 def main(url: str) -> str:
@@ -25,17 +26,22 @@ def main(url: str) -> str:
     return post_data_list
 
 # GETS SOME ATTRIBUTE DATA ABOUT THE BLOG POSTS
-def sample(url: str) -> list:
-    worker = BlogPost()
-    soup = worker.get_soup(url)
-    return worker.get_blog_dict(soup)
+def sample(url: str, table_name: str, attribute: str, value: str, index_name: str=None) -> list:
+    #worker = BlogPost()
+    #soup = worker.get_soup(url)
+    #post_data = worker.get_blog_dict(soup)
+    #Create DynamoDBWorker object
+    db =DynamoDBWorker(table_name)
+    return db.search_items(attribute, value)
+    #db.post_item(post_data)
+
    
 if __name__ == "__main__":
     from pprint import pprint
     url = "https://aws.amazon.com/blogs/networking-and-content-delivery/use-bring-your-own-ip-addresses-byoip-and-rfc-8805-for-localization-of-internet-content/"
-    data = sample(url)
+    table_name = "blog_posts"
+    data = sample(url, table_name, "date_published", "09-14-2023")
     print(data)
     #url = "https://aws.amazon.com/blogs/networking-and-content-delivery/"
     #soup = main(url)
     #print(soup)
-    #pprint(summary)
