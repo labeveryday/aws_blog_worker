@@ -4,11 +4,11 @@ from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key, Attr
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(filename='./logs/app.log', filemode='a', format='%(asctime)s - - %(module)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 class DynamoDBWorker:
     """Encapsulates an Amazon DynamoDB table of blog post."""
-    def __init__(self, table_name, region_name="us-west-2"):
+    def __init__(self, table_name, region_name="us-east-1"):
         self.dynamodb = boto3.resource(service_name='dynamodb', region_name=region_name)
         self.table_name = table_name
         self.table = self.get_or_create_table()
@@ -61,11 +61,22 @@ class DynamoDBWorker:
             logging.error(f"Could not create table. Error: {e}")
 
     def post_item(self, item):
+        """
+        Method to post an item to the DynamoDB table.
+
+        Args:
+            item (dict):            The item to post.
+        
+        """
         try:
-            self.table.put_item(Item=item)
+            self.table.put_item(
+                Item=item,
+                ConditionExpression=Attr('blog_title').not_exists()
+            )
             logging.info(f"Item posted: {item}")
         except ClientError as e:
             logging.error(f"Could not post item. Error: {e}")
+        
 
     def search_items(self, attribute, value, index_name=None):
         try:

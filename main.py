@@ -1,13 +1,75 @@
-from blog_worker import BlogPost
-from db_worker import DynamoDBWorker
+from workers.blog_worker import BlogPost
+from workers.db_worker import DynamoDBWorker
+from workers.s3_worker import S3Worker
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+TABLE_NAME = "blog_posts"
 
 
-def main(url: str) -> str:
-    current_url = url
+def main(url: str=None) -> str:
     worker = BlogPost()
-    i = 0
+    s3 = S3Worker(BUCKET_NAME)
+    #db = DynamoDBWorker(TABLE_NAME)
+    # Gets a list of all AWS Networking and Content Delivery blogs
+    blog_list = get_aws_blogs_list(worker, url)
+   
+    # Takes the aws blog urls and gets the data about each blog and returns a list of dictionaries
+
+    i =0
+    for blog in blog_list:
+        # Gets the soup of the blog
+        soup = worker.get_soup(blog)
+        # Gets the blog dict meta-data
+        blog_dict = worker.get_blog_dict(soup)
+        # Generates a string for the S3 file name
+        blog_title = get_title_string(blog_dict)
+        # Gets the blog body
+        blog_body = worker.get_blog_body(soup)
+        # Writes the blog body to S3
+        s3_url = s3.write_file_directly_to_s3(file_name=blog_title, data=blog_body)
+        # Adds the s3 url of blog to the blog_dict of meta-data
+        #blog_dict["s3_url"] = s3_url
+        # Writes the blog dict to DynamoDB
+        #db.post_item(blog_dict)
+        i += 1
+        print(f"{str(i)}. {blog_title}")
+    return "Completed successfully"
+
+def get_title_string(blog_dict: dict) -> str:
+    """
+    Generates a string for the S3 file name.
+
+    Args:
+        blog_dict (dict):       blog dict
+    Returns:
+        str: s3 file name string.
+    """
+    date_published = blog_dict.get("date_published", None)
+    blog_title = blog_dict.get("blog_title", None)
+    if date_published and blog_title:
+        title = date_published + " " + blog_title
+    else:
+        raise ValueError("date_published and blog_title are required.")
+    s3_file_name = S3Worker.generate_filename(title)
+    return s3_file_name
+
+def get_aws_blogs_list(aws_blog_worker: BlogPost, url: str) -> list:
+    """
+    Gets a list of aws blog urls.
+
+    Args:
+        aws_blog_worker (BlogPost):  BlogPost object
+    Returns:
+        list: list of aws blog urls
+    """
+    current_url = "https://aws.amazon.com/blogs/networking-and-content-delivery/"
+    worker = aws_blog_worker
     temp = []
-    soup = worker.get_soup(current_url)
+    soup = worker.get_soup(url)
     # Compiles a list of aws blog urls -> worker.network_content_delivery_links
     while current_url:
         temp.append(current_url)
@@ -17,31 +79,13 @@ def main(url: str) -> str:
             current_url = worker.check_pagination(soup)
             if current_url in temp:
                 break
-    aws_blog_urls = worker.network_content_delivery_links
-    # Takes the aws blog urls and gets the data about each blog and returns a list of dictionaries
-    post_data_list = []
-    for blog_url in aws_blog_urls:
-        soup = worker.get_soup(blog_url)
-        post_data_list.append(worker.get_blog_dict(soup))
-    return post_data_list
-
-# GETS SOME ATTRIBUTE DATA ABOUT THE BLOG POSTS
-def sample(url: str, table_name: str, attribute: str, value: str, index_name: str=None) -> list:
-    #worker = BlogPost()
-    #soup = worker.get_soup(url)
-    #post_data = worker.get_blog_dict(soup)
-    #Create DynamoDBWorker object
-    db =DynamoDBWorker(table_name)
-    return db.search_items(attribute, value)
-    #db.post_item(post_data)
-
+    
+    return aws_blog_worker.network_content_delivery_links
    
 if __name__ == "__main__":
     from pprint import pprint
-    url = "https://aws.amazon.com/blogs/networking-and-content-delivery/use-bring-your-own-ip-addresses-byoip-and-rfc-8805-for-localization-of-internet-content/"
-    table_name = "blog_posts"
-    data = sample(url, table_name, "date_published", "09-14-2023")
-    print(data)
-    #url = "https://aws.amazon.com/blogs/networking-and-content-delivery/"
-    #soup = main(url)
-    #print(soup)
+    #url = "https://aws.amazon.com/blogs/networking-and-content-delivery/use-bring-your-own-ip-addresses-byoip-and-rfc-8805-for-localization-of-internet-content/"
+    url = "https://aws.amazon.com/blogs/networking-and-content-delivery/"
+    soup = main(url)
+    pprint(soup[0])
+    print(len(soup))

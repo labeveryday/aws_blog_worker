@@ -2,9 +2,14 @@
 Gets Blog Posts data and summarizes it
 """
 import requests
+import logging
 from bs4 import BeautifulSoup
 from datetime import datetime
 import sys
+
+
+# Setup logging
+logging.basicConfig(filename='./workers/logs/app.log', filemode='a', format='%(asctime)s - - %(module)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 
 # Create a class that will be used to gather filter and return blog posts from websites
@@ -25,10 +30,12 @@ class BlogPost:
         """
         response = requests.get(url)
         if response.status_code != 200:
+            logging.error(f"Failed: Could not access {self.url}")
             print("Error: Could not get the soup of the website")
             return None
         else:
-            self.url = url  
+            self.url = url
+            logging.info(f"GET {self.url}")
             return BeautifulSoup(response.text, "html.parser")
 
     def get_all_url_links_on_page(self, soup=BeautifulSoup):
@@ -111,7 +118,7 @@ class BlogPost:
         pub_date_str = soup.find("time", {"property": "datePublished"}).get_text().strip()
         # Convert Published date to datetime object
         date_obj = datetime.strptime(pub_date_str, "%d %b %Y")
-        published_date = date_obj.strftime("%m-%d-%Y")
+        published_date = date_obj.strftime("%Y-%m-%d")
         # Get tags from post
         blog_title_tags = soup.find("span", {"class": "blog-post-categories"}).get_text().strip().lower() + f", {blog_title.lower()}"
         aws_tags = self.get_tags(blog_title_tags)
@@ -154,3 +161,5 @@ class BlogPost:
                 if tag in blog_title_tags:
                     tags.append(tag.lower())
             return tags
+
+
