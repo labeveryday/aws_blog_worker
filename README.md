@@ -1,15 +1,47 @@
-# Project Documentation: AWS Blog Scraper
+# Project Documentation: AWS Blog to S3
 
-![main-img](./img/blog-search-automater.drawio.png)
-gathers blogs and info from aws
+This repo retrieves AWS blog posts from a feed URL and saves them to an Amazon S3 bucket.
 
-## Overview
+![Blog search automator](./img/blog-search-automater.png)
 
-This project provides a set of Python scripts to scrape blog posts from AWS's Networking and Content Delivery blog and store the retrieved information in an Amazon DynamoDB table. The project consists of three main Python files:
+This project is for learning purposes and will have multiple phases. 
 
-1. `blog_worker.py` - Contains functions for scraping data from AWS blog posts.
-2. `db_worker.py` - Contains functions for interacting with an Amazon DynamoDB table.
-3. `main.py` - Contains the main program logic for scraping and storing data.
+- **Phase 1**: AWS Blog to S3 <-- Done
+- **Phase 2**: Create Amazon Bedrock Knowledge Base based on blog data (In progress)
+- **Phase 3**: Schedule blog scraping and automate the syncing of KB
+- **Phase 4**: Create an Agent that leverages the KB
+
+## Description
+
+The script takes a URL pointing to a list of AWS blog posts and an S3 bucket name as input. It retrieves each blog post, extracts the metadata and body content, generates a filename, and saves the file directly to the specified S3 bucket.
+
+The main functions are:
+
+- `get_aws_blogs_list` - Retrieves a list of AWS blog post URLs from the feed
+- `get_title_string` - Generates a filename string for the S3 object
+- `main` - Retrieves the blogs, processes them, and saves to S3
+
+## Usage
+
+From the cli pass in the AWS Blog Home page and the S3 bucket name to save the files to. 
+
+```bash
+python main.py --aws_blog_home_url "https://aws.amazon.com/blogs/networking-and-content-delivery/" --bucket_name "my-example-bucket"
+```
+
+- `aws_blog_home_url` - The URL of the AWS blog feed (e.g. https://aws.amazon.com/blogs/aws/)
+- `bucket_name` - The name of the S3 bucket to save files to
+
+This repo will crawl through each post on the `aws.amazon.com/blogs/example` site list and then store them in S3. Right now the tool will only gather posts back until 2017. If you need older posts feel free to do a PR or to reach out to me. 
+
+Here are some sites you can use:
+
+- https://aws.amazon.com/blogs/security/
+- https://aws.amazon.com/blogs/networking-and-content-delivery/
+- https://aws.amazon.com/blogs/architecture/
+- https://aws.amazon.com/blogs/devops/
+- https://aws.amazon.com/blogs/mobile/
+
 
 ## Dependencies
 
@@ -17,32 +49,27 @@ This project provides a set of Python scripts to scrape blog posts from AWS's Ne
 - BeautifulSoup4
 - boto3
 - requests
-- logging
 
 To clone this repository, open your terminal and run the following git command:
 
 ```bash
-git clone https://github.com/labeveryday/getting-started-with-generative-ai.git
+git clone https://github.com/labeveryday/aws_blog_worker.git
 ```
 
 Navigate to the directory:
 
 ```bash
-cd getting-started-with-generative-ai
+cd aws_blog_worker
 ```
 
-## Setting Up a Virtual Environment
+## Setup
 
-It's highly recommended to create a virtual environment to manage dependencies. You can create a virtual environment using venv by running the following command:
+It is recommended to use a virtual environment:
 
-```bash
-python -m venv myenv
-```
-
-Activate the virtual environment:
 - On macOS and Linux:
 ```bash
-source myenv/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 ```
 
 - On Windows:
@@ -50,90 +77,19 @@ source myenv/bin/activate
 .\myenv\Scripts\activate
 ```
 
-## Installing Requirements
-
-Once inside the project directory, install the required Python packages using pip:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
->NOTE: Before using the `db_worker.py` you will need to setup [credentials](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html) for accessing AWS.
+>NOTE: Before using the `main.py` you will need to setup [credentials](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html) for accessing AWS.
 
-## Files
-
-### blog_worker.py
-
-This file defines the `BlogPost` class that is responsible for scraping the AWS blog pages.
-
-#### Methods
-
-- `get_soup(url: str) -> BeautifulSoup`: 
-  - Fetches and returns the BeautifulSoup object for the given URL.
-  
-- `get_all_url_links_on_page(soup: BeautifulSoup) -> list`: 
-  - Retrieves all blog URLs from the AWS Networking and Content Delivery blog.
-  
-- `check_pagination(soup: BeautifulSoup) -> str`: 
-  - Checks for pagination and returns the next URL.
-  
-- `get_blog_body(soup: BeautifulSoup) -> str`: 
-  - Gets the body of the blog post.
-  
-- `get_blog_dict(soup: BeautifulSoup) -> dict`: 
-  - Returns a dictionary containing key information about the blog post.
-
-- `get_tags(blog_title_tags: list) -> list`: 
-  - Returns a list of AWS tags associated with the blog post.
-
-### db_worker.py
-
-This file defines the `DynamoDBWorker` class, which encapsulates an Amazon DynamoDB table of blog posts.
-
-#### Methods
-
-- `get_or_create_table() -> Table`: 
-  - Gets or creates the DynamoDB table.
-  
-- `post_item(item: dict) -> None`: 
-  - Inserts a new item into the table.
-  
-- `search_items(attribute: str, value: str, index_name: str=None) -> list`: 
-  - Searches for items in the table by attribute.
-
-### main.py
-
-This file contains the main program logic. It utilizes both the `BlogPost` and `DynamoDBWorker` classes to scrape AWS blog posts and store them in a DynamoDB table.
-
-#### Functions
-
-- `main(url: str) -> str`: 
-  - Retrieves blog data and returns it as a list of dictionaries.
-  
-- `sample(url: str, table_name: str, attribute: str, value: str, index_name: str=None) -> list`: 
-  - Retrieves specific attributes about blog posts from DynamoDB based on query parameters.
-
-## Usage
-
-Run the `main.py` script to start the scraping process.
-
-```bash
-python main.py
-```
-
-### Example
-
-```python
-from pprint import pprint
-url = "https://aws.amazon.com/blogs/networking-and-content-delivery/use-bring-your-own-ip-addresses-byoip-and-rfc-8805-for-localization-of-internet-content/"
-table_name = "blog_posts"
-data = sample(url, table_name, "date_published", "09-14-2023")
-print(data)
-```
 
 ## Contributing
 
 If you'd like to contribute, please fork the repository and make changes as you'd like. Pull requests are warmly welcomed.
+
 
 ## License
 
@@ -147,4 +103,4 @@ My passions lie in Network Engineering, Cloud Computing, Automation, and connect
 
 My hangouts:
 - [LinkedIn](https://www.linkedin.com/in/duanlightfoot/)
-- [Twitter](https://twitter.com/labeveryday)
+- [YouTube](https://www.youtube.com/@LabEveryday)

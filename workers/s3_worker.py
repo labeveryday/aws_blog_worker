@@ -1,17 +1,19 @@
 """
 This file is used to interact with S3.
 """
-import boto3
 import re
-import logging
-from botocore.exceptions import ClientError
-
-
-# Setup logging
-logging.basicConfig(filename='./logs/app.log', filemode='a', format='%(asctime)s - - %(module)s - %(levelname)s - %(message)s', level=logging.INFO)
+import sys
+import random
+import string
+import boto3
+from botocore.exceptions import ClientError, ParamValidationError
+from botocore import errorfactory
 
 
 class S3Worker:
+    """
+    Class used to interact with S3.
+    """
     def __init__(self, bucket_name: str, region_name: str="us-east-1"):
         """
         Class used to interact with S3.
@@ -60,10 +62,38 @@ class S3Worker:
         """
         try:
             self.s3 = boto3.client(service_name="s3", region_name=region_name)
+            self.s3.head_bucket(Bucket=bucket_name)
             self.bucket = bucket_name
         except ClientError as e:
-            logging.error(f"Could not connect to s3 client. Error: {e}")
-    
+            sys.exit(f"Could not connect to s3 client or bucket Not Found. Error: {e}")
+        except ParamValidationError as e:
+            sys.exit(f"Unable to create bucket. Error: {e}")
+
+    def create_bucket(self, bucket_name: str=None, add_random_characters: bool=False):
+        """
+        Method to create a bucket.
+
+        Args:
+            bucket_name (str):   Name of the bucket
+        
+        return: None
+        
+        :Example:
+            s3 = S3Worker(bucket_name="XXXXXXXXX")
+            s3.create_bucket("XXXXXXXXX")
+        """
+        if bucket_name is None:
+            bucket_name = self.bucket
+        if add_random_characters is True:
+            bucket_name = bucket_name + self.random_string()
+        try:
+            self.s3.create_bucket(Bucket=bucket_name)
+            print(f"Created bucket {bucket_name}")
+            self.bucket = bucket_name
+        except errorfactory.BucketAlreadyExists as e:
+            print(f"Bucket {bucket_name} already exists. \
+                  Try changing the bucket name or adding random characters. Error: {e}")
+
     def list_objects_in_bucket(self, bucket_name=None):
         """
         Method to list objects in a bucket.
@@ -82,7 +112,7 @@ class S3Worker:
             bucket_name = self.bucket
         response = self.s3.list_objects_v2(Bucket=bucket_name)
         return response.get('Contents', [])
-    
+
     def object_exists(self, file_name: str):
         """
         Method to check if an object exists in S3.
@@ -102,8 +132,8 @@ class S3Worker:
             response = self.s3.head_object(Bucket=self.bucket, Key=file_name)
             if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 return True
-        except Exception as e:
-            logging.info(f"File {file_name} exists in bucket {self.bucket}. Error: {e}")
+        except ClientError:
+            # If file does not exist, return None
             return False
 
     def upload_file(self, file_path: str, file_name: str=None):
@@ -125,7 +155,6 @@ class S3Worker:
             raise ValueError("Bucket name is not set")
         # Check if the object already exists
         if self.object_exists(file_name):
-            print(f"Object {file_name} already exists in bucket {self.bucket}.")
             return None
         if file_name is None:
             path=file_path
@@ -135,9 +164,9 @@ class S3Worker:
             self.s3.upload_file(Filename=file_path, Bucket=self.bucket, Key=file_name)
             return f"https://{self.bucket}.s3.amazonaws.com/data/{file_name}"
         except Exception as e:
-            logging.info(f"Could not upload file {file_name} to bucket {self.bucket}. Error: {e}")
+            print(f"Could not upload file {file_name} to bucket {self.bucket}. Error: {e}")
             return None
-    
+
     def write_file_directly_to_s3(self, file_name: str, data: str):
         """
         Method to writes data directly to S3.
@@ -153,7 +182,7 @@ class S3Worker:
             s3.write_file_directly_to_s3("sample.txt", "Hello World!")
         """
         if self.bucket is None:
-            raise ValueError("Bucket name is not set") 
+            raise ValueError("Bucket name is not set")
         # Check if the object already exists
         if self.object_exists(file_name):
             print(f"Object {file_name} already exists in bucket {self.bucket}.")
@@ -163,7 +192,25 @@ class S3Worker:
             if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
                 return {"s3_url": f"https://{self.bucket}.s3.amazonaws.com/data/{file_name}"}
         except Exception as e:
-            logging.info(f"Could not write file {file_name} to bucket {self.bucket}. Error: {e}") 
+            print(f"Could not write file {file_name} to bucket {self.bucket}. Error: {e}")
+            return None
+
+    def random_string(self):
+        """
+        Generate a random string of 13 characters
+
+        This function generates a random string of 13 characters 
+        to use as a unique identifier or filename.
+
+        Returns:
+            str: A random string of 13 characters
+        """
+        # generate 4 digits at random
+        nums = random.choices(string.digits, k=4)
+        # generate 9 lowercase letters at random
+        letters = random.choices(string.ascii_lowercase, k=9)
+        # shuffle both nums + letters
+        return ''.join(random.sample(nums + letters, 13))
 
     @staticmethod
     def _renamer(title: str):
@@ -175,14 +222,11 @@ class S3Worker:
 
         return: str
         """
-        
         # Strip special characters.
         title = re.sub(r'[^\w\s-]', '', title)
-        
         # Convert the title to lowercase and replace spaces with hyphens.
         _ = title.strip().lower()
         new_title = re.sub(r'[-\s]+', '-', _)
-        
         return new_title
 
     @ staticmethod
@@ -205,25 +249,10 @@ class S3Worker:
         return f"{date}-{S3Worker._renamer(title)}{extension}"
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
     from pprint import pprint
-    import os
 
-    load_dotenv()
-
-    BUCKET_NAME=os.getenv("BUCKET_NAME")
-    
+    BUCKET_NAME="Enter my bucket name"
     s3 = S3Worker(BUCKET_NAME)
-    
     pprint(s3.upload_file("../img/sample.txt"))
     for item in s3.list_objects_in_bucket():
-        print(item["Key"])  
-    
-    # Test
-    # blog_string = "2023-09-24 This is my first! blog?"
-    # filename = generate_filename(blog_string)
-    # print(filename)  # Outputs: "2023-09-24-this-is-my-first-blog.txt"
-
-    # Method to write directly to S3
-    # pprint(s3.write_file_directly_to_s3("demo.txt", "Hello World!"))
-    
+        print(item["Key"])
